@@ -7,7 +7,7 @@ from unidecode import unidecode
 
 class PortugueseClubGraphs():
 	def __init__(self):
-		self.wb = openpyxl.load_workbook(filename="GráficosSVG-Portugal.xlsx", read_only=True, data_only=True)
+		self.wb = openpyxl.load_workbook(filename="Graphs_SVG_Portugal.xlsx", read_only=True, data_only=True)
 
 		self.set_league_sizes()
 		self.set_club_info()
@@ -26,11 +26,11 @@ class PortugueseClubGraphs():
 
 	# CLASS SETTERS
 	def set_league_sizes(self):
-		"""Process the Tamanhos worksheet and extract the size of each league tier on each season"""
-		ws_tamanhos, row_idx = self.wb["Tamanhos"], -1
+		"""Process the League Sizes worksheet and extract the size of each league tier on each season"""
+		ws_league_sizes, row_idx = self.wb["League Sizes"], -1
 		league_sizes, pyramid_size, max_depth = {}, 0, 0
 
-		for row in ws_tamanhos.rows:
+		for row in ws_league_sizes.rows:
 			row_idx += 1
 
 			if row_idx == 0:
@@ -52,10 +52,10 @@ class PortugueseClubGraphs():
 		self.league_sizes, self.no_seasons, self.pyramid_size, self.max_depth = league_sizes, len(league_sizes), pyramid_size, max_depth
 
 	def set_club_info(self):
-		"""Process the Clubes worksheet to compile each club's info and each of its seasons' overall league position"""
-		ws_clubes = self.wb["Clubes"]
+		"""Process the Clubs worksheet to compile each club's info and each of its seasons' overall league position"""
+		ws_clubs = self.wb["Clubs"]
 		club_info = {}
-		lines = list(ws_clubes.rows)
+		lines = list(ws_clubs.rows)
 
 		for club_idx in range(1, len(lines[0]), 3):
 			club_name_cell = lines[0][club_idx]
