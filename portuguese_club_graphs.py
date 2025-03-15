@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import openpyxl, os
+from lxml import etree
 from reportlab.graphics import renderPM
 from svglib.svglib import svg2rlg
 from unidecode import unidecode
@@ -24,7 +25,9 @@ class PortugueseClubGraphs():
 
 		self.wb.close()
 
-	# CLASS SETTERS
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	#                                  CLASS SETTERS                                  #
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
 	def set_league_sizes(self):
 		"""Process the League Sizes worksheet and extract the size of each league tier on each season"""
 		ws_league_sizes, row_idx = self.wb["League Sizes"], -1
@@ -94,6 +97,7 @@ class PortugueseClubGraphs():
 		self.club_info = club_info
 
 	def set_derbies(self):
+		"""List of relevant Portuguese derbies to have SVGs generated"""
 		self.derbies = [
 			{"full_name": "Clássico", "clubs": ("SL Benfica", "FC Porto")},
 			{"full_name": "Dérbi de Lisboa", "clubs": ("SL Benfica", "Sporting CP")},
@@ -116,41 +120,67 @@ class PortugueseClubGraphs():
 		]
 
 	def create_directories(self):
+		"""Check for the existence of the landing directories and creates them if necessary"""
 		for directory in ("graphs-clubs", "graphs-derbies"):
 			if not os.path.exists(directory):
 				os.makedirs(directory)
 
-	# HELPER METHODS FOR FILE GENERATION
-	def get_header(self, full_name, derby=False):
-		""""""
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	#                        HELPER METHODS FOR FILE GENERATION                       #
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	def get_svg_body(self, full_name : str, derby=False) -> etree._Element:
+		"""Construct main body of SVG XML.
+
+		:param full_name: Full representation of club name.
+		:param derby: Whether the SVG is for just one club (False) or multiple (True).
+		:return root: svg node which will be the root for all other elements."""
+		graph_width = 50 + self.no_seasons * self.x_inc
+		# Main <svg> node
+		root = etree.Element(
+			"svg",
+			attrib={"version": "1.1", "width": str(graph_width), "height": str(500), "style": "font-family: Arial;"},
+			nsmap={None: "http://www.w3.org/2000/svg", "xlink": "http://www.w3.org/1999/xlink"},
+		)
+		# White background
+		etree.SubElement(
+			root, "rect",
+			attrib={"width": str(graph_width), "height": str(500), "style": "fill: white;"}
+		)
+		# Graph title
+		title = etree.SubElement(
+			root, "text",
+			attrib={"x": str((self.no_seasons * self.x_inc + 39) / 2), "y": str(45), "fill": "#000000", "style": "font-size: 30px; text-anchor: middle"},
+		)
 		q = "\"" if derby else ""
 		s = "s" if derby else ""
+		title.text = f"{q}{full_name}{q} League Performance{s} 1939 – {1938 + self.no_seasons}"
 
-		return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>" +\
-			f"<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" version=\"1.1\" width=\"{50 + self.no_seasons * self.x_inc}\" height=\"500\" style=\"font-family: Arial\">" +\
-			f"  <!-- years: 12px wide; positions: 5px high -->\n" +\
-			f"  <rect width=\"{50 + self.no_seasons * self.x_inc}\" height=\"500\" style=\"fill: white\"/>\n" +\
-			f"  <text x=\"{(self.no_seasons * self.x_inc + 39) / 2}\" y=\"45\" fill=\"#000\" style=\"font-size: 30px; text-anchor: middle\">{q}{full_name}{q} League Performance{s} 1939 – {1938 + self.no_seasons}</text>\n"
+		return root
 
-	def get_background(self):
-		""""""
+	def get_background(self, root : etree._Element):
+		"""Construct graph background: axis labels, league tiers, axis markers.
+		
+		:param root: Root svg node to which to append the elements generated here."""
 		year_y = self.year_y
 		year_text = self.year_text
 
-		output = ""
-
 		# Y-axis label: "Position"
-		output += f"  <text x=\"22\" y=\"264\" transform=\"rotate(-90, 22, 264)\" text-anchor=\"middle\" style=\"font-weight: bold; font-size: 15px\">Position</text>\n"
+		y_axis_label = etree.SubElement(
+			root, "text",
+			attrib={"x": str(22), "y": str(264), "transform": "rotate(-90, 22, 264)", "text-anchor": "middle", "style": "font-weight: bold; font-size: 15px"},
+		)
+		y_axis_label.text = "Position"
 
 		# X-axis label: years
-		years = "  <text transform=\"rotate(-90,51,492)\" font-size=\"11\">\n"
-
-		for i in range(1, self.no_seasons, 2):
-			years += f"    <tspan x=\"51\" y=\"{year_y}\">{year_text}</tspan>\n"
+		x_axis_label = etree.SubElement(
+			root, "text",
+			attrib={"transform": "rotate(-90, 51, 492)", "font-size": str(11)},
+		)
+		for _ in range(1, self.no_seasons, 2):
+			year = etree.SubElement(x_axis_label, "tspan", attrib={"x": str(51), "y": str(year_y)})
+			year.text = str(year_text)
 			year_text += 2
 			year_y += 24
-
-		output += years + "  </text>\n"
 
 		# Generate tiers
 		for i in reversed(range(self.pyramid_size)):
@@ -168,43 +198,49 @@ class PortugueseClubGraphs():
 
 			d += f"h{x_acc}v{data[-1] * self.y_inc * -1}z"
 
-			output += f"  <path d=\"{d}\" fill=\"{self.tier_colors[i]}\"/>\n"
+			etree.SubElement(
+				root, "path",
+				attrib={"d": d, "fill": self.tier_colors[i]}
+			)
 
 		# Outline and year/position markers
-		year_lines = f"M45,{self.y_max + 69.5}v6"
-		posi_lines = "M32.5,71h6"
-
-		for i in range(1, self.no_seasons):
-			year_lines += "m12-6v6"
-
-		for i in range(11, self.max_depth, 10):
-			posi_lines += "m-6,50h6"
-
-		output += f"  <path d=\"M39,69h{self.x_max}v{self.y_max}H39z{year_lines}{posi_lines}\" width=\"1\" fill=\"none\" stroke=\"#b3b3b3\"/>\n"
+		no_year_marks = (self.no_seasons - 1)
+		no_position_marks = len(range(11, self.max_depth, 10))
+		year_lines = f"M45,{self.y_max + 69.5}v6{no_year_marks * 'm12-6v6'}"
+		posi_lines = f"M32.5,71h6{no_position_marks * 'm-6,50h6'}"
+		outline_path = f"M39,69h{self.x_max}v{self.y_max}H39z{year_lines}{posi_lines}"
+		etree.SubElement(
+			root, "path",
+			attrib={"d": outline_path, "width": str(1), "fill": "none", "stroke": "#b3b3b3"},
+		)
 
 		# 5-year markers
-		fiveyear_lines = ""
+		fiveyear_mark = f"m60-{self.y_max - 1}v{self.y_max - 1}"
+		no_fiveyear_marks = (self.no_seasons - 2) // 5
+		fiveyear_path = f"M57,69.5v{self.y_max - 1}{no_fiveyear_marks * fiveyear_mark}"
+		etree.SubElement(
+			root, "path",
+			attrib={"d": fiveyear_path, "stroke-width": str(1), "stroke-width": str(0.5), "fill": "none", "stroke": "#ffffff"},
+		)
 
-		for i in list(range(1, self.no_seasons, 5))[:-1]:
-			fiveyear_lines += f"m60-{self.y_max - 1}v{self.y_max - 1}"
+	def get_plot_line(self, root : etree._Element, club_info : dict):
+		"""Construct league position plot line (or lines, depending on data continuity).
+		Due to gaps on the source material (relegation to non-national division, missing data, etc.),
+		there may be the need of having more than one line to show these gaps.
+		If from one season to the next a club jumps over one division this means an administrative
+		promotion/relegation (cf. Caso Mateus or Apito Dourado); these cases are drawn as dotted lines.
 
-		output += f"  <path d=\"M57,69.5v{self.y_max - 1}{fiveyear_lines}\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1\" stroke-opacity=\".5\"/>\n"
-
-		return output
-
-	def get_plot_line(self, club_info):
-		""""""
+		:param root: Root svg node to which to append the elements generated here.
+		:param club_info: Club informations gathered from source material."""
+		short_name = club_info["short_name"]
 		line_type = club_info["line_type"]
 		line_color = club_info["line_color"]
 		club_data = club_info["data"]
-
-		plotted_line, plot_rest, on, plot_no = "", "", False, 1
 		overall = [club_data[year]["overall"] for year in club_data]
 		position_league = [club_data[year]["position"] for year in club_data]
 		league = [club_data[year]["league"] for year in club_data]
 
-		output = ""
-		output2 = ""
+		plotted_line, on, plot_no = "", False, 1
 
 		for i in range(len(overall)):
 			if not on:
@@ -212,76 +248,141 @@ class PortugueseClubGraphs():
 					plotted_line = f"M{45 + i * self.x_inc},{overall[i] * self.y_inc + 66}"
 					on = True
 
-					if overall[i+1] == -1 and position_league[i+1] == -1:
+					if overall[i + 1] == -1 and position_league[i + 1] == -1:
 						plotted_line += "z"
 
 			else:
 				# Administrative drop/raise of more then 1 division (i.e. Boavista or Gil Vicente)
-				if abs(league[i-1] - league[i]) > 1 and overall[i] != -1 and position_league[i] != -1:
-					output2 += self._finish_plot(plot_no, line_color, line_type, plotted_line)
+				if abs(league[i - 1] - league[i]) > 1 and overall[i] != -1 and position_league[i] != -1:
+					root.append(self.finish_plot_line(line_color, line_type, short_name, plot_no, plotted_line))
 					plot_no += 1
 
-					plotted_line = f"M{45 + (i-1) * self.x_inc},{overall[i-1] * self.y_inc + 66}l{self.x_inc},{(overall[i] - overall[i-1]) * self.y_inc}"
-					output += self._finish_plot(plot_no, line_color, line_type, plotted_line, transparency=True)
+					plotted_line = f"M{45 + (i - 1) * self.x_inc},{overall[i - 1] * self.y_inc + 66}l{self.x_inc},{(overall[i] - overall[i - 1]) * self.y_inc}"
+					root.append(self.finish_plot_line(line_color, line_type, short_name, plot_no, plotted_line, discontinuous=True))
 					plot_no += 1
 
 					plotted_line = f"M{45 + i * self.x_inc},{overall[i] * self.y_inc + 66}"
 
-					if overall[i+1] == -1 and position_league[i+1] == -1:
+					if overall[i+1] == -1 and position_league[i + 1] == -1:
 						plotted_line += "z"
 
 				elif overall[i] != -1 and position_league[i] != -1:
-					plotted_line += f"l{self.x_inc},{(overall[i] - overall[i-1]) * self.y_inc}"
+					plotted_line += f"l{self.x_inc},{(overall[i] - overall[i - 1]) * self.y_inc}"
 
 				else:
-					output2 += self._finish_plot(plot_no, line_color, line_type, plotted_line)
+					root.append(self.finish_plot_line(line_color, line_type, short_name, plot_no, plotted_line))
 					plot_no += 1
 					on = False
 
 		if on:
-			output2 += self._finish_plot(plot_no, line_color, line_type, plotted_line)
+			root.append(self.finish_plot_line(line_color, line_type, short_name, plot_no, plotted_line))
 
-		return output + output2
+	def finish_plot_line(self, line_color : list, line_type : str, short_name : str, plot_no : int, plotted_line : str, discontinuous=False) -> etree._Element:
+		"""Generate path element representing a league position evolution for a club.
+		
+		:param line_color: Pair of hex colors to be used in the plot line.
+		:param line_type: Whether the line to be drawn is of solid color, dashed or with a border.
+		:param short_name: Sanitized representation of club name.
+		:param plot_no: Incremental number to label each path for this club, as there may be more than one.
+		:param plotted_line: Path string representing the league position evolution.
+		:param discontinuous: Whether this line should be dotted to show division jump.
+		:return output: g element containing one path and one use elements representing the line."""
+		plot_id = f"{short_name}{plot_no}"
+		output = etree.Element("g", attrib={"fill": "none", "stroke-linejoin": "round"})
+		etree.SubElement(output, "path", attrib={"d": plotted_line, "id": plot_id})
 
-	# FILE GENERATORS
-	def generate_file(self, club_info):
-		""""""
-		short_name = club_info["short_name"]
+		base_attrib = {"href": f"#{plot_id}"}
+		base_nsmap = {}
+		if discontinuous:
+			base_attrib["stroke-dasharray"] = "1,6"
 
-		output = ""
-		output += self.get_header(club_info["full_name"])
-		output += self.get_background()
-		output += self.get_plot_line(club_info)
-		output += "</svg>\n"
+		# A solid line is simply a solid line with the primary color
+		if line_type == "solid":
+			etree.SubElement(
+				output, "use",
+				attrib={**base_attrib, "stroke-linecap": "round", "stroke-width": str(4), "stroke": line_color[0]},
+				nsmap=base_nsmap,
+			)
 
-		with open(f"graphs-clubs/{short_name}_League_Performance.svg", "w+", encoding="utf-8") as out_file:
-			out_file.truncate(0)
-			out_file.write(output)
+		# A bordered line is a solid line with the primary color with a thinner line on top with the secondary color
+		elif line_type == "border":
+			etree.SubElement(
+				output, "use",
+				attrib={**base_attrib, "stroke-linecap": "round", "stroke-width": str(5), "stroke": line_color[1]},
+				nsmap=base_nsmap,
+			)
+			etree.SubElement(
+				output, "use",
+				attrib={**base_attrib, "stroke-linecap": "round", "stroke-width": str(2), "stroke": line_color[0]},
+				nsmap=base_nsmap,
+			)
 
-		drawing = svg2rlg(f"graphs-clubs/{short_name}_League_Performance.svg")
-		renderPM.drawToFile(drawing, f"graphs-clubs/{short_name}_League_Performance.png", fmt="PNG")
+		# A dashed line is a solid line with the primary color with a thinner dashed line on top with the secondary color
+		elif line_type == "dashed":
+			etree.SubElement(
+				output, "use",
+				attrib={**base_attrib, "stroke-linecap": "round", "stroke-width": str(5), "stroke": line_color[1]},
+				nsmap=base_nsmap,
+			)
+			etree.SubElement(
+				output, "use",
+				attrib={**base_attrib, "stroke-dasharray": "10,10", "stroke-width": str(2), "stroke": line_color[0]},
+				nsmap=base_nsmap,
+			)
 
-	def generate_file_derby(self, derby, club_info):
+		return output
+
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	#                                 FILE GENERATORS                                 #
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	def generate_file(self, club_info : dict):
+		"""Generate a SVG file representing a club's league position evolution through the seasons.
+		Also generates a PNG rendering of the SVG file for sharing.
+		
+		:param club_info: Club information of the plotted club."""
+		root = self.get_svg_body(club_info["full_name"])
+		self.get_background(root)
+		self.get_plot_line(root, club_info)
+		file_path = self.get_output_file_path(club_info["short_name"])
+		self.write_tree_to_file(root, file_path)
+
+	def generate_file_derby(self, derby : dict, club_info : dict):
+		"""Generate a SVG file representing multiple clubs' league position evolution through the seasons.
+		The multiple teams represented are (usually) rivals in what in football it's called a derby.
+		Also generates a PNG rendering of the SVG file for sharing.
+		
+		:param derby: Dictionary with information regarding the teams to be plotted.
+		:param club_info: Dictionary containing the club information of the plotted clubs, jeyed by club name."""
 		full_name = derby["full_name"] or " vs ".join(derby["clubs"])
 		short_name = self._get_short_name(full_name, True)
-
-		output = ""
-		output += self.get_header(full_name, True)
-		output += self.get_background()
-
+		root = self.get_svg_body(full_name, True)
+		self.get_background(root)
 		for club in derby["clubs"]:
-			output += self.get_plot_line(club_info[club])
+			self.get_plot_line(root, club_info[club])
+		file_path = self.get_output_file_path(short_name, True)
+		self.write_tree_to_file(root, file_path)
 
-		output += "</svg>\n"
+	def get_output_file_path(self, short_name : str, derby=False) -> str:
+		"""Generate the file path for the output files.
+		
+		:param short_name: Sanitized representation of club name.
+		:param derby: Whether the SVG is for just one club (False) or multiple (True).
+		:return: Base file path to which the files will be written."""
+		return f"graphs-{'derbies' if derby else 'clubs'}/{short_name}_League_Performance{'s' if derby else ''}"
 
-		with open(f"graphs-derbies/{short_name}_League_Performances.svg", "w+", encoding="utf-8") as out_file:
-			out_file.truncate(0)
-			out_file.write(output)
+	def write_tree_to_file(self, root : etree._Element, file_path : str):
+		"""
+		
+		:param root: svg element to be written into the file system.
+		:param file_path: Base file path to which the files are written."""
+		tree = etree.ElementTree(root)
+		tree.write(f"{file_path}.svg", xml_declaration=True, encoding="utf-8", standalone=False)
+		drawing = svg2rlg(f"{file_path}.svg")
+		renderPM.drawToFile(drawing, f"{file_path}.png", fmt="PNG")
 
-		drawing = svg2rlg(f"graphs-derbies/{short_name}_League_Performances.svg")
-		renderPM.drawToFile(drawing, f"graphs-derbies/{short_name}_League_Performances.png", fmt="PNG")
-
-	# MAIN METHOD
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	#                                   MAIN METHOD                                   #
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
 	def run(self):
 		for club in self.club_info.values():
 			self.generate_file(club)
@@ -289,23 +390,17 @@ class PortugueseClubGraphs():
 		for derby in self.derbies:
 			self.generate_file_derby(derby, self.club_info)
 
-	# GENERIC HELPER METHODS
-	def _get_short_name(self, name, derby=False):
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	#                              GENERIC HELPER METHODS                             #
+	# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = #
+	def _get_short_name(self, name : str, derby=False) -> str:
+		"""Sanatize club name to be more "web friendly" (no diacritics nor spaces).
+		
+		:param name: String to be sanatised.
+		:param derby: Whether the SVG is for just one club (False) or multiple (True).
+		Relevant since in those cases we want spaces to be replaced by underscores.
+		:return: Sanatised string."""
 		return unidecode(name.replace(" ", "_" if derby else "").replace(".", "").replace("-", ""))
-
-	def _finish_plot(self, plot_no, line_color, line_type, plotted_line, transparency=False):
-		if line_type == "solid":
-			plot_rest = f"    <use xlink:href=\"#plot{plot_no}\" stroke-linecap=\"round\" stroke-width=\"4\" stroke=\"{line_color[0]}\"" + (" stroke-dasharray=\"1,6\"" if transparency else "") + "/>\n"
-
-		elif line_type == "border":
-			plot_rest = f"    <use xlink:href=\"#plot{plot_no}\" stroke-linecap=\"round\" stroke-width=\"5\" stroke=\"{line_color[1]}\"" + (" stroke-dasharray=\"1,6\"" if transparency else "") + "/>\n" +\
-				f"    <use xlink:href=\"#plot{plot_no}\" stroke-linecap=\"round\" stroke-width=\"2\" stroke=\"{line_color[0]}\"" + (" stroke-dasharray=\"1,6\"" if transparency else "") + "/>\n"
-
-		elif line_type == "dashed":
-			plot_rest = f"    <use xlink:href=\"#plot{plot_no}\" stroke-linecap=\"round\" stroke-width=\"5\" stroke=\"{line_color[0]}\"" + (" stroke-dasharray=\"1,6\"" if transparency else "") + "/>\n" +\
-				f"    <use xlink:href=\"#plot{plot_no}\" stroke-dasharray=\"10,10\" stroke-width=\"2\" stroke=\"{line_color[1]}\"" + (" stroke-dasharray=\"1,6\"" if transparency else "") + "/>\n"
-
-		return f"  <g fill=\"none\" stroke-linejoin=\"round\">\n    <path d=\"{plotted_line}\" id=\"plot{plot_no}\"/>\n{plot_rest}  </g>\n"
 
 
 if __name__ == "__main__":
