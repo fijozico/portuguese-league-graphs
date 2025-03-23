@@ -1,2 +1,7 @@
-/graphs-*
-*.xlsx
+# Directories
+**/__pycache__
+graphs_*
+league_graphs/logs
+
+# Files
+**/*.xlsx

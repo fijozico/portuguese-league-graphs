@@ -1,0 +1,7 @@
+lxml
+logging
+openpyxl
+os
+reportlab
+svglib
+unidecode
