@@ -1,7 +1,9 @@
+dotenv
 lxml
 logging
 openpyxl
 os
+psycopg2
 reportlab
 svglib
 unidecode

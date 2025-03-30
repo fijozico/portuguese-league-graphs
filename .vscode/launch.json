@@ -6,9 +6,9 @@
     "configurations": [
         {
             "name": "Portuguese League Graphs: Debug",
-            "type": "node",
+            "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}\\league_graphs\\__main__.py",
+            "program": "${workspaceFolder}\\league_graphs",
             "console": "integratedTerminal"
         }
     ]

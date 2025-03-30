@@ -5,3 +5,4 @@ league_graphs/logs
 
 # Files
 **/*.xlsx
+**/.env

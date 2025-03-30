@@ -6,9 +6,8 @@
         {
             "label": "Run app",
             "type": "shell",
-            "command": "${command:python.interpreterPath} ${workspaceFolder}\\league_graphs\\__main__.py",
+            "command": "${command:python.interpreterPath} ${workspaceFolder}\\league_graphs",
             "group": {
-                "kind": "build",
                 "isDefault": true
             },
             "presentation": {
