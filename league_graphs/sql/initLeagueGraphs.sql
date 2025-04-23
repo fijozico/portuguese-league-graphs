@@ -20,7 +20,7 @@ BEGIN
     ELSE
         PERFORM dblink_exec(
             'dbname=postgres user=postgres password=' || _password_pg,
-            'CREATE DATABASE ' || _database_db);
+            'CREATE DATABASE ' || _database_db || ' WITH ENCODING UTF8');
     END IF;
 
     -- Create database user if it doesn't exist

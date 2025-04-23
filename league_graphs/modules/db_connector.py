@@ -9,7 +9,7 @@ import psycopg2
 logger = logging.getLogger(__name__)
 
 
-class DBConnector():
+class DBConnector(object):
     """Provides tools for connecting to a PostgreSQL database"""
     def __init__(self, config : dict):
         """Initiate PostgreSQL database connection using the configuration at database.conf

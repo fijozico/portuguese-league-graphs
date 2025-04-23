@@ -10,7 +10,7 @@ from unidecode import unidecode
 logger = logging.getLogger(__name__)
 
 
-class GraphGenerator():
+class GraphGenerator(object):
     def __init__(self):
         file_name = "Graphs_SVG_Portugal.xlsx"
         logger.info(f"Processing input file {file_name}")
@@ -27,7 +27,7 @@ class GraphGenerator():
         self.y_max = self.max_depth * self.y_inc
         self.year_y = 502
         self.year_text = 1940
-        self.tier_colors = ["#c4c4c4", "#b3b3b3", "#999999", "#666666"]
+        self.tier_colors = ["#cccccc", "#b3b3b3", "#999999", "#777777"]
 
         self.wb.close()
 
